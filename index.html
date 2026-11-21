@@ -244,28 +244,42 @@
       grid-template-columns: 1.3fr 1fr;
       gap: 8px;
     }
+    .deck-card-tools {
+      display: flex;
+      gap: 4px;
+      align-items: center;
+      flex-shrink: 0;
+    }
+    .deck-rename-form {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-top: 4px;
+    }
+    .deck-rename-form input {
+      padding: 6px 9px;
+      font-size: 0.95rem;
+      font-weight: 700;
+    }
     .deck-card-new {
       justify-content: center;
-      align-items: center;
+      align-items: stretch;
       text-align: center;
       border-style: dashed;
       box-shadow: none;
-      background: transparent;
-      cursor: pointer;
+      background: var(--surface);
       color: var(--muted);
+      gap: 12px;
     }
     .deck-card-new::before { display: none; }
-    .deck-card-new-plus {
-      width: 52px;
-      height: 52px;
-      border-radius: 999px;
-      background: var(--surface);
-      border: 1px solid var(--border);
+    .new-deck-form {
       display: grid;
-      place-items: center;
-      font-size: 1.6rem;
-      color: var(--accent);
-      margin-bottom: 10px;
+      gap: 10px;
+      width: 100%;
+    }
+    .new-deck-form input {
+      text-align: center;
+      font-weight: 600;
     }
 
     /* ページドット */

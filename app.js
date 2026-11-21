@@ -99,7 +99,7 @@ function normalizeCard(raw) {
 
 async function ensureDefaultDeck() {
   const decks = await getAllFromStore(DECK_STORE);
-  if (!decks.some((d) => d.id === DEFAULT_DECK_ID)) {
+  if (decks.length === 0) {
     await putToStore(DECK_STORE, {
       id: DEFAULT_DECK_ID,
       name: 'デフォルト',
@@ -108,10 +108,18 @@ async function ensureDefaultDeck() {
   }
 }
 
+function getFallbackDeckId(excludeId = null) {
+  const sorted = [...allDecks].sort((a, b) => a.createdAt - b.createdAt);
+  const found = sorted.find((d) => d.id !== excludeId);
+  return found ? found.id : DEFAULT_DECK_ID;
+}
+
 function getDeckName(deckId) {
   if (deckId === 'all') return 'すべての単語帳';
   const deck = allDecks.find((d) => d.id === deckId);
-  return deck ? deck.name : 'デフォルト';
+  if (deck) return deck.name;
+  const fallback = allDecks[0];
+  return fallback ? fallback.name : 'デフォルト';
 }
 
 function getAllUniqueTags(cards = allCards) {
@@ -302,7 +310,7 @@ function setSearchOpen(open) {
 function openDeckWorkspace(deckId, mode = 'study', tag = 'all') {
   activeDeckId = deckId;
   activeTag = tag;
-  formTargetDeckId = deckId === 'all' ? DEFAULT_DECK_ID : deckId;
+  formTargetDeckId = deckId === 'all' ? getFallbackDeckId() : deckId;
   document.getElementById('active-deck-title').textContent = getDeckName(deckId);
   document.getElementById('add-msg').textContent = '';
   if (mode === 'search') {
@@ -331,9 +339,9 @@ function renderHomeCarousel() {
     ...sortedDecks.map((d, idx) => ({
       id: d.id,
       name: d.name,
+      createdAt: d.createdAt,
       kicker: `DECK ${idx + 1}`,
       isAll: false,
-      isDefault: d.id === DEFAULT_DECK_ID,
     })),
   ];
 
@@ -351,6 +359,8 @@ function renderHomeCarousel() {
     top.className = 'deck-card-top';
 
     const titleWrap = document.createElement('div');
+    titleWrap.style.flex = '1';
+    titleWrap.style.minWidth = '0';
     const kicker = document.createElement('div');
     kicker.className = 'deck-card-kicker';
     kicker.textContent = item.kicker;
@@ -361,22 +371,76 @@ function renderHomeCarousel() {
     titleWrap.append(kicker, title);
     top.appendChild(titleWrap);
 
-    if (!item.isAll && !item.isDefault) {
-      const delBtn = document.createElement('button');
-      delBtn.type = 'button';
-      delBtn.className = 'btn-danger';
-      delBtn.textContent = '削除';
-      delBtn.addEventListener('click', async (e) => {
-        e.stopPropagation();
-        if (!confirm(`単語帳「${item.name}」を削除しますか？（中の単語はデフォルトに移動します）`)) return;
-        for (const c of allCards.filter((x) => x.deckId === item.id)) {
-          c.deckId = DEFAULT_DECK_ID;
-          await putToStore(CARD_STORE, c);
-        }
-        await deleteFromStore(DECK_STORE, item.id);
-        await refreshAll();
+    if (!item.isAll) {
+      const tools = document.createElement('div');
+      tools.className = 'deck-card-tools';
+
+      const renameBtn = document.createElement('button');
+      renameBtn.type = 'button';
+      renameBtn.className = 'btn-ghost';
+      renameBtn.textContent = '名前変更';
+      renameBtn.addEventListener('click', () => {
+        if (titleWrap.querySelector('.deck-rename-form')) return;
+        title.classList.add('hidden');
+        const form = document.createElement('form');
+        form.className = 'deck-rename-form';
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = item.name;
+        input.required = true;
+
+        const saveBtn = document.createElement('button');
+        saveBtn.type = 'submit';
+        saveBtn.className = 'btn-ghost';
+        saveBtn.textContent = '保存';
+
+        form.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const newName = input.value.trim();
+          if (!newName) return;
+          await putToStore(DECK_STORE, {
+            id: item.id,
+            name: newName,
+            createdAt: item.createdAt,
+          });
+          await refreshAll();
+        });
+
+        input.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape') {
+            form.remove();
+            title.classList.remove('hidden');
+          }
+        });
+
+        form.append(input, saveBtn);
+        titleWrap.appendChild(form);
+        input.focus();
+        input.select();
       });
-      top.appendChild(delBtn);
+      tools.appendChild(renameBtn);
+
+      if (sortedDecks.length > 1) {
+        const delBtn = document.createElement('button');
+        delBtn.type = 'button';
+        delBtn.className = 'btn-danger';
+        delBtn.textContent = '削除';
+        delBtn.addEventListener('click', async () => {
+          const fallbackId = getFallbackDeckId(item.id);
+          const fallbackName = getDeckName(fallbackId);
+          if (!confirm(`単語帳「${item.name}」を削除しますか？（中の単語は「${fallbackName}」に移動します）`)) return;
+          for (const c of allCards.filter((x) => x.deckId === item.id)) {
+            c.deckId = fallbackId;
+            await putToStore(CARD_STORE, c);
+          }
+          await deleteFromStore(DECK_STORE, item.id);
+          await refreshAll();
+        });
+        tools.appendChild(delBtn);
+      }
+
+      top.appendChild(tools);
     }
 
     const stats = document.createElement('div');
@@ -435,18 +499,38 @@ function renderHomeCarousel() {
     carousel.appendChild(cardEl);
   });
 
-  // 末尾に「新しい単語帳」カード
-  const newCard = document.createElement('button');
-  newCard.type = 'button';
+  // 末尾に「新しい単語帳」カード（ポップアップなしの直接入力UI）
+  const newCard = document.createElement('article');
   newCard.className = 'deck-card deck-card-new';
-  const plus = document.createElement('div');
-  plus.className = 'deck-card-new-plus';
-  plus.textContent = '+';
-  const label = document.createElement('div');
-  label.style.fontWeight = '700';
-  label.textContent = '新しい単語帳を作成';
-  newCard.append(plus, label);
-  newCard.addEventListener('click', createNewDeck);
+
+  const newTitle = document.createElement('div');
+  newTitle.style.fontWeight = '700';
+  newTitle.style.color = 'var(--text)';
+  newTitle.textContent = '新しい単語帳を作成';
+
+  const newForm = document.createElement('form');
+  newForm.className = 'new-deck-form';
+
+  const newInput = document.createElement('input');
+  newInput.type = 'text';
+  newInput.placeholder = '単語帳の名前を入力';
+  newInput.autocomplete = 'off';
+  newInput.required = true;
+
+  const newSubmit = document.createElement('button');
+  newSubmit.type = 'submit';
+  newSubmit.className = 'btn btn-primary';
+  newSubmit.textContent = '作成';
+
+  newForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = newInput.value.trim();
+    if (!name) return;
+    await createNewDeck(name);
+  });
+
+  newForm.append(newInput, newSubmit);
+  newCard.append(newTitle, newForm);
   carousel.appendChild(newCard);
 
   // ページドット
@@ -507,12 +591,12 @@ function updateCarouselIndicator() {
   dots.forEach((d, i) => d.classList.toggle('active', i === closestIdx));
 }
 
-async function createNewDeck() {
-  const name = prompt('新しい単語帳の名前');
-  if (!name || !name.trim()) return;
+async function createNewDeck(name) {
+  const trimmed = String(name || '').trim();
+  if (!trimmed) return;
   const deck = {
     id: crypto.randomUUID ? crypto.randomUUID() : `deck-${Date.now()}`,
-    name: name.trim(),
+    name: trimmed,
     createdAt: Date.now(),
   };
   await putToStore(DECK_STORE, deck);
@@ -830,6 +914,39 @@ function renderCardList() {
       }
     });
 
+    const editBtn = document.createElement('button');
+    editBtn.type = 'button';
+    editBtn.className = 'btn-ghost';
+    editBtn.textContent = '編集';
+    editBtn.addEventListener('click', async () => {
+      formTargetDeckId = card.deckId;
+      document.getElementById('input-front').value = card.front;
+      document.getElementById('input-back').value = card.back;
+      document.getElementById('input-note').value = card.note || '';
+      pendingLinkTargets = card.tags.map((tag) => {
+        const match = allCards.find((c) => c.id !== card.id && c.front === tag);
+        return { cardId: match ? match.id : null, tag };
+      });
+
+      const now = Date.now();
+      const counterparts = allCards.filter(
+        (c) => c.id !== card.id && c.tags.includes(card.front)
+      );
+      for (const cp of counterparts) {
+        cp.tags = cp.tags.filter((t) => t !== card.front);
+        cp.updatedAt = now;
+        await putToStore(CARD_STORE, cp);
+      }
+      await deleteFromStore(CARD_STORE, card.id);
+
+      await refreshAll();
+      setSearchOpen(false);
+      setSubTab('add');
+      renderFormHelpers();
+      document.getElementById('add-msg').textContent = `「${card.front}」を編集用に読み込みました`;
+      document.getElementById('input-front').focus();
+    });
+
     const delBtn = document.createElement('button');
     delBtn.type = 'button';
     delBtn.className = 'btn-danger';
@@ -839,7 +956,7 @@ function renderCardList() {
       await refreshAll();
     });
 
-    actions.append(addTagBtn, delBtn);
+    actions.append(editBtn, addTagBtn, delBtn);
     row.append(textWrap, actions);
     li.appendChild(row);
 
