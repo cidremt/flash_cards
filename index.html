@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>マイ単語帳</title>
+
+  <!-- PWA / iOS向け設定 -->
+  <link rel="manifest" href="./manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="単語帳">
+  <link rel="apple-touch-icon" href="./icon-192.png">
+
+  <style>
+    :root {
+      --bg: #f4f6f9;
+      --surface: #ffffff;
+      --surface-subtle: #eef2f6;
+      --text: #0f172a;
+      --muted: #64748b;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+      --tag-bg: #eef2ff;
+      --tag-text: #4338ca;
+      --again: #ef4444;
+      --hard: #f59e0b;
+      --good: #10b981;
+      --easy: #3b82f6;
+      --border: #e2e8f0;
+      --shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
+      --shadow-sm: 0 2px 10px rgba(15, 23, 42, 0.05);
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1120;
+        --surface: #111827;
+        --surface-subtle: #1e293b;
+        --text: #f8fafc;
+        --muted: #94a3b8;
+        --accent: #3b82f6;
+        --accent-soft: #172554;
+        --tag-bg: #1e1b4b;
+        --tag-text: #a5b4fc;
+        --border: #1f2937;
+        --shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+        --shadow-sm: 0 2px 12px rgba(0, 0, 0, 0.25);
+      }
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Noto Sans JP", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: calc(16px + env(safe-area-inset-top)) 0 calc(32px + env(safe-area-inset-bottom));
+      max-width: 540px;
+      margin-inline: auto;
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
+
+    .container { padding-inline: 16px; }
+    .page { display: none; animation: fadeIn 0.18s ease; }
+    .page.active { display: block; }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* トップバー */
+    .topbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      padding: 0 16px;
+      margin-bottom: 18px;
+    }
+    .topbar-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .topbar-right { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+    h1, h2 {
+      font-size: 1.15rem;
+      font-weight: 700;
+      margin: 0;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .badge {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 3px 9px;
+      border-radius: 999px;
+      background: var(--surface-subtle);
+      color: var(--muted);
+    }
+    .icon-btn {
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 6px 11px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .search-icon-btn {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--text);
+      border-radius: 10px;
+      display: grid;
+      place-items: center;
+      cursor: pointer;
+      padding: 0;
+      transition: all 0.15s;
+    }
+    .search-icon-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .search-icon-btn svg { width: 17px; height: 17px; }
+    .back-btn {
+      border: none;
+      background: var(--surface-subtle);
+      color: var(--text);
+      border-radius: 10px;
+      padding: 6px 10px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+
+    /* 縦スクロール単語帳カルーセル */
+    .deck-carousel {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      height: min(64vh, 450px);
+      overflow-y: auto;
+      scroll-snap-type: y mandatory;
+      padding: 64px 20px;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: none;
+      -webkit-mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        #000 13%,
+        #000 87%,
+        transparent 100%
+      );
+      mask-image: linear-gradient(
+        to bottom,
+        transparent 0%,
+        #000 13%,
+        #000 87%,
+        transparent 100%
+      );
+    }
+    .deck-carousel::-webkit-scrollbar { display: none; }
+
+    .deck-card {
+      flex: 0 0 auto;
+      scroll-snap-align: center;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 20px 20px 16px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 220px;
+      position: relative;
+      overflow: hidden;
+      transform: scale(0.95);
+      opacity: 0.72;
+      transition: transform 0.22s ease, opacity 0.22s ease;
+    }
+    .deck-card.is-active {
+      transform: scale(1);
+      opacity: 1;
+    }
+    .deck-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto 0;
+      height: 6px;
+      background: var(--deck-color, var(--accent));
+    }
+    .deck-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .deck-card-kicker {
+      font-size: 0.72rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      color: var(--deck-color, var(--accent));
+      margin-bottom: 4px;
+    }
+    .deck-card-title {
+      font-size: 1.45rem;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin: 0;
+      word-break: break-word;
+    }
+    .deck-stats {
+      display: flex;
+      gap: 18px;
+      margin: 18px 0 14px;
+    }
+    .deck-stat-num {
+      font-size: 1.55rem;
+      font-weight: 800;
+      line-height: 1.1;
+    }
+    .deck-stat-num.due { color: var(--deck-color, var(--accent)); }
+    .deck-stat-label {
+      font-size: 0.72rem;
+      color: var(--muted);
+      margin-top: 2px;
+    }
+    .deck-card-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      min-height: 24px;
+      margin-bottom: 16px;
+    }
+    .deck-card-actions {
+      display: grid;
+      grid-template-columns: 1.3fr 1fr;
+      gap: 8px;
+    }
+    .deck-card-new {
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      border-style: dashed;
+      box-shadow: none;
+      background: transparent;
+      cursor: pointer;
+      color: var(--muted);
+    }
+    .deck-card-new::before { display: none; }
+    .deck-card-new-plus {
+      width: 52px;
+      height: 52px;
+      border-radius: 999px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      display: grid;
+      place-items: center;
+      font-size: 1.6rem;
+      color: var(--accent);
+      margin-bottom: 10px;
+    }
+
+    /* ページドット */
+    .carousel-dots {
+      display: flex;
+      justify-content: center;
+      gap: 6px;
+      margin: 2px 0 18px;
+    }
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 999px;
+      background: var(--border);
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      transition: width 0.2s ease, background 0.2s ease;
+    }
+    .dot.active {
+      width: 20px;
+      background: var(--accent);
+    }
+
+    /* ホーム下部のタグショートカット */
+    .home-tags-box {
+      padding: 0 16px;
+    }
+    .home-section-title {
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin: 0 0 8px 2px;
+    }
+
+    /* 横スクロールチップバー */
+    .chip-strip {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 2px 0 6px;
+      margin-bottom: 10px;
+      scrollbar-width: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    .chip-strip::-webkit-scrollbar { display: none; }
+    .chip-btn {
+      flex: 0 0 auto;
+      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+    .chip-btn.active {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+
+    /* セグメントタブ */
+    .sub-nav {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      padding: 4px;
+      background: var(--surface-subtle);
+      border-radius: 12px;
+      margin-bottom: 14px;
+    }
+    .sub-nav button {
+      padding: 8px 6px;
+      border: none;
+      border-radius: 9px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.86rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .sub-nav button.active {
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: 0 1px 4px rgba(15, 23, 42, 0.08);
+    }
+    .sub-tab { display: none; }
+    .sub-tab.active { display: block; }
+
+    /* 学習カード */
+    .controls {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+      font-size: 0.84rem;
+      color: var(--muted);
+    }
+    .toggle-label {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .toggle-switch {
+      position: relative;
+      display: inline-block;
+      width: 44px;
+      height: 26px;
+      flex-shrink: 0;
+    }
+    .toggle-switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute;
+    }
+    .toggle-track {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 999px;
+      transition: background 0.2s ease;
+    }
+    .toggle-track::after {
+      content: "";
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      background: #ffffff;
+      box-shadow: 0 1px 4px rgba(15, 23, 42, 0.22);
+      transition: transform 0.2s ease;
+    }
+    .toggle-switch input:checked + .toggle-track {
+      background: var(--accent);
+    }
+    .toggle-switch input:checked + .toggle-track::after {
+      transform: translateX(18px);
+    }
+    .toggle-switch input:focus-visible + .toggle-track {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .flashcard {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      min-height: 240px;
+      padding: 24px 20px;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: var(--shadow);
+      transition: transform 0.12s ease;
+    }
+    .flashcard:active { transform: scale(0.99); }
+    .card-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .card-side { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; color: var(--muted); }
+    .deck-pill {
+      font-size: 0.7rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--surface-subtle);
+      color: var(--muted);
+    }
+    .card-face { font-size: 1.65rem; font-weight: 700; word-break: break-word; }
+    .card-note { margin-top: 10px; font-size: 0.88rem; color: var(--muted); white-space: pre-wrap; }
+    .card-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 12px; }
+    .card-sub { margin-top: 14px; font-size: 0.78rem; color: var(--muted); }
+
+    .related-box {
+      width: 100%;
+      margin-top: 16px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+      text-align: left;
+    }
+    .related-title { font-size: 0.74rem; font-weight: 600; color: var(--muted); margin-bottom: 6px; }
+    .related-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 5px; }
+    .related-item {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      font-size: 0.82rem;
+    }
+    .related-item strong { font-weight: 600; }
+    .related-item span { color: var(--muted); font-size: 0.75rem; flex-shrink: 0; }
+
+    .reveal-wrap { margin-top: 14px; }
+    .rating-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 14px; }
+    .rating-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 2px;
+      padding: 10px 4px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      background: var(--surface);
+      color: var(--text);
+      font-weight: 600;
+      font-size: 0.84rem;
+      cursor: pointer;
+    }
+    .rating-btn small { font-size: 0.7rem; font-weight: 500; color: var(--muted); }
+    .rating-btn[data-q="1"] { border-color: color-mix(in srgb, var(--again) 40%, var(--border)); color: var(--again); }
+    .rating-btn[data-q="3"] { border-color: color-mix(in srgb, var(--hard) 40%, var(--border)); color: var(--hard); }
+    .rating-btn[data-q="4"] { border-color: color-mix(in srgb, var(--good) 40%, var(--border)); color: var(--good); }
+    .rating-btn[data-q="5"] { border-color: color-mix(in srgb, var(--easy) 40%, var(--border)); color: var(--easy); }
+
+    /* タグチップ */
+    .tag-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      background: var(--tag-bg);
+      color: var(--tag-text);
+    }
+    .tag-chip button {
+      border: none;
+      background: transparent;
+      color: inherit;
+      font-size: 0.8rem;
+      padding: 0;
+      cursor: pointer;
+      line-height: 1;
+    }
+    .picker-results {
+      margin-top: 6px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .picker-item {
+      width: 100%;
+      border: none;
+      border-bottom: 1px solid var(--border);
+      background: transparent;
+      color: var(--text);
+      padding: 8px 11px;
+      text-align: left;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
+      font-size: 0.84rem;
+    }
+    .picker-item:last-child { border-bottom: none; }
+    .picker-item:hover { background: var(--surface-subtle); }
+    .picker-item-sub { font-size: 0.75rem; color: var(--muted); }
+    .inline-linker { margin-top: 6px; }
+
+    /* フォーム・ボタン */
+    .btn {
+      padding: 10px 14px;
+      border: none;
+      border-radius: 12px;
+      font-size: 0.88rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .btn-primary { background: var(--accent); color: #fff; width: 100%; }
+    .btn-subtle { background: var(--surface-subtle); color: var(--text); width: 100%; }
+    .btn-ghost {
+      background: var(--surface);
+      color: var(--muted);
+      border: 1px solid var(--border);
+      padding: 5px 10px;
+      font-size: 0.78rem;
+      border-radius: 8px;
+      cursor: pointer;
+      white-space: nowrap;
+    }
+    .btn-danger {
+      background: transparent;
+      color: var(--again);
+      border: none;
+      padding: 4px 8px;
+      font-size: 0.78rem;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 14px 16px;
+      margin-bottom: 14px;
+      box-shadow: var(--shadow-sm);
+    }
+    .field { margin-bottom: 10px; }
+    .field:last-of-type { margin-bottom: 12px; }
+    .field label {
+      display: block;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: var(--muted);
+      margin-bottom: 4px;
+    }
+    input[type="text"], input[type="search"], textarea {
+      width: 100%;
+      padding: 9px 11px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 0.92rem;
+      font-family: inherit;
+      outline: none;
+    }
+    input:focus, textarea:focus { border-color: var(--accent); }
+    textarea { resize: vertical; min-height: 52px; }
+    .dup-hint { margin-top: 5px; font-size: 0.76rem; color: var(--muted); }
+
+    /* 検索・一括タグ */
+    .search-panel { display: grid; gap: 8px; margin-bottom: 12px; }
+    .search-panel input[type="search"] { background: var(--surface); }
+    .bulk-tag-row { display: flex; gap: 8px; align-items: center; }
+    .bulk-tag-row input { flex: 1; padding: 7px 10px; font-size: 0.84rem; background: var(--surface); }
+
+    .list-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 0.8rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+    .card-list { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+    .card-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+    .card-item-row { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+    .card-item-text { min-width: 0; flex: 1; }
+    .card-item-top { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+    .card-item-front { font-weight: 700; font-size: 0.95rem; }
+    .card-item-due {
+      font-size: 0.68rem;
+      padding: 2px 7px;
+      border-radius: 999px;
+      background: var(--surface-subtle);
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .card-item-due.due { background: var(--accent-soft); color: var(--accent); }
+    .card-item-back { font-size: 0.85rem; color: var(--muted); margin-top: 2px; }
+    .card-item-tags { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
+    .item-actions { display: flex; gap: 4px; align-items: center; }
+
+    .backup-note { margin: 0 0 14px; font-size: 0.84rem; color: var(--muted); }
+    .file-input { width: 100%; font-size: 0.88rem; color: var(--muted); }
+    .status-msg { margin-top: 10px; font-size: 0.86rem; color: var(--good); }
+    .hidden { display: none !important; }
+  </style>
+</head>
+<body>
+
+  <!-- ページ1: 単語帳ホーム（横スクロール選択） -->
+  <div id="page-home" class="page active">
+    <div class="topbar">
+      <div class="topbar-left">
+        <h1>マイ単語帳</h1>
+        <span id="net-status" class="badge">オンライン</span>
+      </div>
+      <div class="topbar-right">
+        <button type="button" id="btn-home-search" class="search-icon-btn" aria-label="単語を検索">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
+        <button type="button" id="btn-open-backup" class="icon-btn">バックアップ</button>
+      </div>
+    </div>
+
+    <div id="deck-carousel" class="deck-carousel"></div>
+    <div id="carousel-dots" class="carousel-dots"></div>
+
+    <div id="home-tags-box" class="home-tags-box hidden">
+      <div class="home-section-title">タグから横断学習</div>
+      <div id="home-tag-strip" class="chip-strip"></div>
+    </div>
+  </div>
+
+  <!-- ページ2: 単語帳ワークスペース（学習・登録・検索） -->
+  <div id="page-deck" class="page">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button type="button" id="btn-back-home" class="back-btn">← 単語帳</button>
+        <h2 id="active-deck-title">デフォルト</h2>
+      </div>
+      <div class="topbar-right">
+        <button type="button" id="btn-toggle-search" class="search-icon-btn" aria-label="検索・一覧">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="container">
+      <div id="deck-main-view">
+      <div class="sub-nav">
+        <button type="button" class="active" data-subtab="study">学習</button>
+        <button type="button" data-subtab="add">登録</button>
+      </div>
+
+      <!-- 学習タブ -->
+      <div id="subtab-study" class="sub-tab active">
+        <div id="study-tag-strip" class="chip-strip"></div>
+
+        <div class="controls">
+          <label class="toggle-label">
+            <span class="toggle-switch">
+              <input type="checkbox" id="toggle-all">
+              <span class="toggle-track"></span>
+            </span>
+            <span>全カード練習</span>
+          </label>
+          <div>
+            <span id="study-progress">0 枚</span>
+            <button type="button" id="btn-shuffle" class="btn-ghost" style="margin-left:8px;">シャッフル</button>
+          </div>
+        </div>
+
+        <div id="flashcard" class="flashcard" role="button" tabindex="0">
+          <div class="card-meta">
+            <span id="card-deck" class="deck-pill hidden"></span>
+            <span id="card-side" class="card-side"></span>
+          </div>
+          <div id="card-face" class="card-face">単語がありません</div>
+          <div id="card-note" class="card-note"></div>
+          <div id="card-tags" class="card-tags"></div>
+          <div id="card-sub" class="card-sub"></div>
+          <div id="related-box" class="related-box hidden">
+            <div class="related-title">同じタグの関連単語</div>
+            <ul id="related-list" class="related-list"></ul>
+          </div>
+        </div>
+
+        <div id="reveal-wrap" class="reveal-wrap hidden">
+          <button type="button" id="btn-reveal" class="btn btn-primary">答えを見る</button>
+        </div>
+
+        <div id="rating-grid" class="rating-grid hidden">
+          <button type="button" class="rating-btn" data-q="1">もう一度<small id="int-1">1分後</small></button>
+          <button type="button" class="rating-btn" data-q="3">難しい<small id="int-3">1日後</small></button>
+          <button type="button" class="rating-btn" data-q="4">普通<small id="int-4">1日後</small></button>
+          <button type="button" class="rating-btn" data-q="5">簡単<small id="int-5">4日後</small></button>
+        </div>
+      </div>
+
+      <!-- 登録タブ -->
+      <div id="subtab-add" class="sub-tab">
+        <form id="add-form" class="panel">
+          <div id="target-deck-field" class="field hidden">
+            <label>追加先の単語帳</label>
+            <div id="target-deck-strip" class="chip-strip" style="margin-bottom:0;"></div>
+          </div>
+          <div class="field">
+            <label for="input-front">表面</label>
+            <input id="input-front" type="text" required autocomplete="off">
+            <div id="dup-hint" class="dup-hint hidden"></div>
+          </div>
+          <div class="field">
+            <label for="input-back">裏面</label>
+            <input id="input-back" type="text" required autocomplete="off">
+          </div>
+          <div class="field">
+            <label for="input-note">メモ（任意）</label>
+            <textarea id="input-note" rows="2"></textarea>
+          </div>
+          <div class="field">
+            <label for="tag-word-search">タグ（単語検索で #見出し語 を追加）</label>
+            <input id="tag-word-search" type="search" placeholder="既存単語を検索して選択" autocomplete="off">
+            <div id="tag-search-results" class="picker-results hidden"></div>
+            <div id="form-selected-tags" class="card-item-tags" style="margin-top:8px;"></div>
+          </div>
+          <button type="submit" class="btn btn-primary">追加</button>
+          <div id="add-msg" class="status-msg"></div>
+        </form>
+      </div>
+      </div>
+
+      <!-- 検索・一覧ビュー（右上の検索マークで開閉） -->
+      <div id="deck-search-view" class="hidden">
+        <div class="search-panel">
+          <input id="search-input" type="search" placeholder="単語・意味・タグで検索">
+          <div id="manage-tag-strip" class="chip-strip" style="margin-bottom:0;"></div>
+        </div>
+
+        <div class="list-header">
+          <span id="list-count">0 件</span>
+        </div>
+        <ul id="card-list" class="card-list"></ul>
+      </div>
+    </div>
+  </div>
+
+  <!-- ページ3: バックアップ -->
+  <div id="page-backup" class="page">
+    <div class="topbar">
+      <div class="topbar-left">
+        <button type="button" id="btn-backup-back" class="back-btn">← 単語帳</button>
+        <h2>バックアップ</h2>
+      </div>
+    </div>
+
+    <div class="container">
+      <div class="panel">
+        <p class="backup-note">単語帳・タグ・復習スケジュールをまとめてJSONで保存・復元できます。</p>
+        <button type="button" id="btn-export" class="btn btn-primary" style="margin-bottom:14px;">
+          JSONを書き出す
+        </button>
+
+        <div class="field" style="margin-bottom:0;">
+          <label for="input-import">JSONから復元・追加</label>
+          <input id="input-import" class="file-input" type="file" accept="application/json,.json">
+        </div>
+        <div id="backup-msg" class="status-msg"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="./app.js"></script>
+</body>
+</html>
