@@ -1301,7 +1301,7 @@ document.getElementById('btn-import-clipboard').addEventListener('click', async 
   }
 });
 
-// --- オンライン状態 & Service Worker ---
+// --- オンライン状態 & Service Worker（自動更新・手動更新） ---
 function updateNetStatus() {
   document.getElementById('net-status').textContent = navigator.onLine ? 'オンライン' : 'オフライン';
 }
@@ -1309,10 +1309,47 @@ window.addEventListener('online', updateNetStatus);
 window.addEventListener('offline', updateNetStatus);
 
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(console.error);
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  let swRefreshing = false;
+
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (!hadController || swRefreshing) return;
+    swRefreshing = true;
+    window.location.reload();
+  });
+
+  window.addEventListener('load', async () => {
+    try {
+      const reg = await navigator.serviceWorker.register('./sw.js');
+      reg.update().catch(() => {});
+    } catch (err) {
+      console.error(err);
+    }
   });
 }
+
+document.getElementById('btn-update-app').addEventListener('click', async () => {
+  const msgEl = document.getElementById('update-msg');
+  if (!navigator.onLine) {
+    msgEl.textContent = 'オフラインのため更新できません。';
+    return;
+  }
+
+  msgEl.textContent = '最新版を取得しています...';
+  try {
+    if ('caches' in window) {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+    if ('serviceWorker' in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    window.location.reload();
+  } catch (err) {
+    msgEl.textContent = `更新に失敗しました: ${err.message}`;
+  }
+});
 
 updateNetStatus();
 refreshAll();
