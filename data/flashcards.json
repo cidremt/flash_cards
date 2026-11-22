@@ -1,7 +1,12 @@
 {
-  "version": 4,
-  "exportedAt": "2026-11-22T05:42:41.598648Z",
+  "version": 3,
+  "exportedAt": "2026-11-22T06:36:14.816Z",
   "decks": [
+    {
+      "id": "default",
+      "name": "デフォルト",
+      "createdAt": 1795305465718
+    },
     {
       "id": "tw-basic-1000",
       "name": "台湾華語 初級・日常",
@@ -10,6 +15,38 @@
     }
   ],
   "cards": [
+    {
+      "id": "eb47f262-7571-4e43-891a-54a3b990cd3d",
+      "deckId": "default",
+      "front": "菜",
+      "back": "料理　(ㄘㄞˋ)",
+      "example": "",
+      "exampleJa": "",
+      "tags": [
+        "蔬菜"
+      ],
+      "reps": 2,
+      "interval": 6,
+      "ease": 2.65,
+      "dueAt": 1795824338797,
+      "updatedAt": 1795305938797
+    },
+    {
+      "id": "f9dc5bcd-4876-4b64-9a89-1e825def2512",
+      "deckId": "default",
+      "front": "蔬菜",
+      "back": "野菜　(ㄕㄨㄘㄞˋ)",
+      "example": "",
+      "exampleJa": "",
+      "tags": [
+        "菜"
+      ],
+      "reps": 1,
+      "interval": 4,
+      "ease": 2.65,
+      "dueAt": 1795651527694,
+      "updatedAt": 1795305927694
+    },
     {
       "id": "tw-0001",
       "deckId": "tw-basic-1000",
