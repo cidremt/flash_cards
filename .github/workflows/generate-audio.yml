@@ -1,0 +1,47 @@
+name: Generate TTS Audio
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'data/flashcards.json'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-tts-audio
+  cancel-in-progress: false
+
+jobs:
+  build-audio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install edge-tts
+        run: pip install --no-cache-dir edge-tts
+
+      - name: Generate missing MP3 files
+        run: python scripts/generate_audio.py data/flashcards.json audio
+
+      - name: Commit and push generated audio
+        run: |
+          if [ -n "$(git status --porcelain audio)" ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add audio
+            git commit -m "Generate TTS audio files [skip ci]"
+            git push
+          else
+            echo "No new audio files to commit."
+          fi

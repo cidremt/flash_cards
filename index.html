@@ -693,7 +693,7 @@
       color: var(--muted);
       margin-bottom: 4px;
     }
-    input[type="text"], input[type="search"], textarea {
+    input[type="text"], input[type="search"], input[type="password"], textarea {
       width: 100%;
       padding: 9px 11px;
       border: 1px solid var(--border);
@@ -979,6 +979,27 @@
         </div>
 
         <div id="backup-msg" class="status-msg"></div>
+      </div>
+
+      <div class="panel">
+        <p class="backup-note">GitHubリポジトリとJSONを同期します。同期するとGitHub Actionsが自動で高音質MP3を生成します（トークンはこの端末内のみに保存）。</p>
+        <div class="field">
+          <label for="gh-repo">リポジトリ（owner/repo）</label>
+          <input id="gh-repo" type="text" value="cidremt/flash_cards" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="gh-path">同期ファイルパス</label>
+          <input id="gh-path" type="text" value="data/flashcards.json" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="gh-token">GitHubトークン（Contents: Read & Write）</label>
+          <input id="gh-token" type="password" placeholder="github_pat_..." autocomplete="off">
+        </div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+          <button type="button" id="btn-gh-push" class="btn btn-primary">GitHubへ同期</button>
+          <button type="button" id="btn-gh-pull" class="btn btn-subtle">GitHubから取得</button>
+        </div>
+        <div id="gh-msg" class="status-msg"></div>
       </div>
 
       <div class="panel">

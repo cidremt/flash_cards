@@ -30,6 +30,7 @@ let listenQueue = [];
 let listenIndex = 0;
 let isListening = false;
 let listenSessionId = 0;
+let activeAudio = null;
 let cachedVoices = [];
 
 // --- IndexedDB ---
@@ -1009,19 +1010,50 @@ function renderListenCard(activePart = null) {
   jaEl.textContent = card.exampleJa || '';
 }
 
+function sanitizeAudioId(id) {
+  return String(id || '').replace(/[^A-Za-z0-9_-]/g, '_');
+}
+
+function playAudioFile(url, rate) {
+  return new Promise((resolve) => {
+    const audio = new Audio(url);
+    audio.playbackRate = rate;
+    activeAudio = audio;
+    let done = false;
+    const finish = (ok) => {
+      if (done) return;
+      done = true;
+      if (activeAudio === audio) activeAudio = null;
+      resolve(ok);
+    };
+    audio.onended = () => finish(true);
+    audio.onerror = () => finish(false);
+    audio.play().catch(() => finish(false));
+  });
+}
+
+async function speakOrPlayAudio(cardId, suffix, text, lang, rate) {
+  const safeId = sanitizeAudioId(cardId);
+  if (safeId) {
+    const ok = await playAudioFile(`./audio/${safeId}-${suffix}.mp3`, rate);
+    if (ok) return;
+  }
+  await speakText(text, lang, rate);
+}
+
 function stopListening() {
   listenSessionId++;
   isListening = false;
+  if (activeAudio) {
+    try { activeAudio.pause(); } catch (_) {}
+    activeAudio = null;
+  }
   if ('speechSynthesis' in window) window.speechSynthesis.cancel();
   if (document.getElementById('listen-example')) renderListenCard(null);
 }
 
 async function startListening() {
   if (!listenQueue.length) return;
-  if (!('speechSynthesis' in window)) {
-    alert('このブラウザは音声読み上げに対応していません。');
-    return;
-  }
   loadVoices();
   const session = ++listenSessionId;
   isListening = true;
@@ -1032,14 +1064,14 @@ async function startListening() {
     const rate = Number(document.getElementById('listen-rate').value) || 1;
 
     renderListenCard('example');
-    await speakText(card.example, lang, rate);
+    await speakOrPlayAudio(card.id, 'ex', card.example, lang, rate);
     if (!isListening || session !== listenSessionId) break;
 
     if (card.exampleJa) {
       await sleepMs(450);
       if (!isListening || session !== listenSessionId) break;
       renderListenCard('ja');
-      await speakText(card.exampleJa, 'ja-JP', rate);
+      await speakOrPlayAudio(card.id, 'ja', card.exampleJa, 'ja-JP', rate);
       if (!isListening || session !== listenSessionId) break;
     }
 
@@ -1583,6 +1615,112 @@ document.getElementById('btn-import-clipboard').addEventListener('click', async 
     msgEl.textContent = `クリップボードの読み込みに失敗しました: ${err.message}`;
   }
 });
+
+// --- GitHub JSON 同期（トークンはこの端末のlocalStorageのみに保存） ---
+const GH_STORAGE_KEY = 'flashcard_gh_sync_v1';
+
+function loadGhSettings() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(GH_STORAGE_KEY) || '{}');
+    if (saved.repo) document.getElementById('gh-repo').value = saved.repo;
+    if (saved.path) document.getElementById('gh-path').value = saved.path;
+    if (saved.token) document.getElementById('gh-token').value = saved.token;
+  } catch (_) {}
+}
+
+function saveGhSettings() {
+  const repo = document.getElementById('gh-repo').value.trim();
+  const path = document.getElementById('gh-path').value.trim();
+  const token = document.getElementById('gh-token').value.trim();
+  localStorage.setItem(GH_STORAGE_KEY, JSON.stringify({ repo, path, token }));
+  return { repo, path, token };
+}
+
+function utf8ToBase64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i++) bin += String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+
+function base64ToUtf8(b64) {
+  const bin = atob(b64.replace(/\s/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder().decode(bytes);
+}
+
+document.getElementById('btn-gh-push').addEventListener('click', async () => {
+  const msgEl = document.getElementById('gh-msg');
+  const { repo, path, token } = saveGhSettings();
+  if (!repo || !path || !token) {
+    msgEl.textContent = 'リポジトリ・パス・トークンを入力してください。';
+    return;
+  }
+  msgEl.textContent = 'GitHubへ同期しています...';
+  try {
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      Accept: 'application/vnd.github+json',
+      'Content-Type': 'application/json',
+    };
+
+    let sha = undefined;
+    const getRes = await fetch(apiUrl, { headers });
+    if (getRes.ok) {
+      const meta = await getRes.json();
+      sha = meta.sha;
+    } else if (getRes.status !== 404) {
+      throw new Error(`取得エラー (${getRes.status})`);
+    }
+
+    const payload = await buildExportPayload();
+    const jsonStr = JSON.stringify(payload, null, 2);
+    const putRes = await fetch(apiUrl, {
+      method: 'PUT',
+      headers,
+      body: JSON.stringify({
+        message: `Sync flashcards (${payload.cards.length} cards)`,
+        content: utf8ToBase64(jsonStr),
+        ...(sha ? { sha } : {}),
+      }),
+    });
+    if (!putRes.ok) {
+      const errBody = await putRes.json().catch(() => ({}));
+      throw new Error(errBody.message || `HTTP ${putRes.status}`);
+    }
+    msgEl.textContent = `GitHubへ同期しました（単語${payload.cards.length}件）。Actionsで未生成MP3が自動作成されます。`;
+  } catch (err) {
+    msgEl.textContent = `同期に失敗しました: ${err.message}`;
+  }
+});
+
+document.getElementById('btn-gh-pull').addEventListener('click', async () => {
+  const msgEl = document.getElementById('gh-msg');
+  const { repo, path, token } = saveGhSettings();
+  if (!repo || !path) {
+    msgEl.textContent = 'リポジトリとパスを入力してください。';
+    return;
+  }
+  msgEl.textContent = 'GitHubから取得しています...';
+  try {
+    const apiUrl = `https://api.github.com/repos/${repo}/contents/${path}`;
+    const headers = { Accept: 'application/vnd.github+json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+    const res = await fetch(apiUrl, { headers });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if (!data.content) throw new Error('ファイル内容を取得できませんでした');
+    const text = base64ToUtf8(data.content);
+    await importJsonText(text);
+    msgEl.textContent = 'GitHubから読み込みました。';
+  } catch (err) {
+    msgEl.textContent = `取得に失敗しました: ${err.message}`;
+  }
+});
+
+loadGhSettings();
 
 // --- オンライン状態 & Service Worker（自動更新・手動更新） ---
 function updateNetStatus() {
