@@ -293,8 +293,11 @@ function formatDueBadge(card, now = Date.now()) {
 // --- ページ切り替え ---
 function showPage(pageId) {
   document.querySelectorAll('.page').forEach((p) => p.classList.remove('active'));
-  document.getElementById(pageId).classList.add('active');
-  window.scrollTo({ top: 0, behavior: 'instant' });
+  const page = document.getElementById(pageId);
+  page.classList.add('active');
+  const scrollBox = page.querySelector('.container');
+  if (scrollBox) scrollBox.scrollTop = 0;
+  if (pageId === 'page-home') requestAnimationFrame(adjustCarouselLayout);
 }
 
 function setSubTab(tabName) {
@@ -557,8 +560,6 @@ function renderHomeCarousel() {
     dotsWrap.appendChild(dot);
   }
 
-  updateCarouselIndicator();
-
   // ホーム下部のタグショートカット
   const allTags = getAllUniqueTags();
   const homeTagsBox = document.getElementById('home-tags-box');
@@ -577,6 +578,25 @@ function renderHomeCarousel() {
   } else {
     homeTagsBox.classList.add('hidden');
   }
+
+  requestAnimationFrame(adjustCarouselLayout);
+}
+
+function adjustCarouselLayout() {
+  const carousel = document.getElementById('deck-carousel');
+  const cards = [...carousel.children];
+  if (!cards.length) return;
+  const carouselH = carousel.clientHeight;
+  if (!carouselH) return;
+
+  const activeCard = carousel.querySelector('.deck-card.is-active') || cards[0];
+  const cardH = activeCard.offsetHeight || 220;
+  const padY = Math.max(20, Math.round((carouselH - cardH) / 2));
+  const fadeSize = Math.max(20, Math.min(padY, Math.round(carouselH * 0.22)));
+
+  carousel.style.setProperty('--carousel-pad', `${padY}px`);
+  carousel.style.setProperty('--fade-size', `${fadeSize}px`);
+  updateCarouselIndicator();
 }
 
 function updateCarouselIndicator() {
@@ -1024,6 +1044,15 @@ async function refreshAll() {
 document.getElementById('deck-carousel').addEventListener('scroll', () => {
   requestAnimationFrame(updateCarouselIndicator);
 });
+window.addEventListener('resize', () => {
+  requestAnimationFrame(adjustCarouselLayout);
+});
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', () => {
+    requestAnimationFrame(adjustCarouselLayout);
+  });
+}
+document.addEventListener('gesturestart', (e) => e.preventDefault(), { passive: false });
 
 document.getElementById('btn-home-search').addEventListener('click', () => {
   document.getElementById('search-input').value = '';
