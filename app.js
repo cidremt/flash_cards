@@ -66,6 +66,16 @@ async function deleteFromStore(storeName, id) {
   });
 }
 
+async function clearStore(storeName) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, 'readwrite');
+    tx.objectStore(storeName).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
 function parseTags(input) {
   if (Array.isArray(input)) {
     return [...new Set(input.map((t) => String(t).trim().replace(/^#/, '')).filter(Boolean))];
@@ -1183,15 +1193,70 @@ document.getElementById('add-form').addEventListener('submit', async (e) => {
 document.getElementById('search-input').addEventListener('input', renderCardList);
 
 // --- JSON エクスポート / インポート ---
-document.getElementById('btn-export').addEventListener('click', async () => {
+async function buildExportPayload() {
   const decks = await getAllFromStore(DECK_STORE);
   const cards = (await getAllFromStore(CARD_STORE)).map(normalizeCard);
-  const payload = {
+  return {
     version: 3,
     exportedAt: new Date().toISOString(),
     decks,
     cards,
   };
+}
+
+async function importJsonText(text) {
+  const msgEl = document.getElementById('backup-msg');
+  const replaceAll = document.getElementById('toggle-replace-import').checked;
+
+  try {
+    const parsed = JSON.parse(text);
+    const decks = Array.isArray(parsed.decks) ? parsed.decks : [];
+    let items;
+    if (Array.isArray(parsed)) {
+      items = parsed;
+    } else if (Array.isArray(parsed.cards)) {
+      items = parsed.cards;
+    } else if (parsed && parsed.front && parsed.back) {
+      items = [parsed];
+    } else {
+      throw new Error('JSON形式が正しくありません');
+    }
+
+    if (replaceAll) {
+      if (!confirm('現在の単語帳と単語をすべて置き換えますか？')) return;
+      await clearStore(CARD_STORE);
+      await clearStore(DECK_STORE);
+    }
+
+    let deckCount = 0;
+    for (const deck of decks) {
+      if (deck.id && deck.name) {
+        await putToStore(DECK_STORE, {
+          id: String(deck.id),
+          name: String(deck.name),
+          createdAt: deck.createdAt || Date.now(),
+        });
+        deckCount++;
+      }
+    }
+
+    let cardCount = 0;
+    for (const item of items) {
+      if (!item.front || !item.back) continue;
+      await putToStore(CARD_STORE, normalizeCard(item));
+      cardCount++;
+    }
+
+    await refreshAll();
+    const deckInfo = deckCount > 0 ? `単語帳${deckCount}件・` : '';
+    msgEl.textContent = `${deckInfo}単語${cardCount}件をインポートしました。`;
+  } catch (err) {
+    msgEl.textContent = `インポートに失敗しました: ${err.message}`;
+  }
+}
+
+document.getElementById('btn-export').addEventListener('click', async () => {
+  const payload = await buildExportPayload();
   const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -1200,43 +1265,39 @@ document.getElementById('btn-export').addEventListener('click', async () => {
   a.download = `flashcards-${date}.json`;
   a.click();
   URL.revokeObjectURL(url);
-  document.getElementById('backup-msg').textContent = `単語帳${decks.length}件・単語${cards.length}件を書き出しました。`;
+  document.getElementById('backup-msg').textContent = `単語帳${payload.decks.length}件・単語${payload.cards.length}件を書き出しました。`;
+});
+
+document.getElementById('btn-copy-json').addEventListener('click', async () => {
+  const msgEl = document.getElementById('backup-msg');
+  try {
+    const payload = await buildExportPayload();
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    msgEl.textContent = `単語帳${payload.decks.length}件・単語${payload.cards.length}件のJSONをコピーしました。`;
+  } catch (err) {
+    msgEl.textContent = `コピーに失敗しました: ${err.message}`;
+  }
+});
+
+document.getElementById('btn-import-file').addEventListener('click', () => {
+  document.getElementById('input-import').click();
 });
 
 document.getElementById('input-import').addEventListener('change', async (e) => {
   const file = e.target.files?.[0];
   if (!file) return;
+  await importJsonText(await file.text());
+  e.target.value = '';
+});
+
+document.getElementById('btn-import-clipboard').addEventListener('click', async () => {
   const msgEl = document.getElementById('backup-msg');
-
   try {
-    const text = await file.text();
-    const parsed = JSON.parse(text);
-    const decks = Array.isArray(parsed.decks) ? parsed.decks : [];
-    const items = Array.isArray(parsed) ? parsed : parsed.cards;
-    if (!Array.isArray(items)) throw new Error('形式が正しくありません');
-
-    for (const deck of decks) {
-      if (deck.id && deck.name) {
-        await putToStore(DECK_STORE, {
-          id: String(deck.id),
-          name: String(deck.name),
-          createdAt: deck.createdAt || Date.now(),
-        });
-      }
-    }
-
-    let count = 0;
-    for (const item of items) {
-      if (!item.front || !item.back) continue;
-      await putToStore(CARD_STORE, normalizeCard(item));
-      count++;
-    }
-    await refreshAll();
-    msgEl.textContent = `${count}件の単語を読み込みました。`;
+    const text = await navigator.clipboard.readText();
+    if (!text.trim()) throw new Error('クリップボードが空です');
+    await importJsonText(text);
   } catch (err) {
-    msgEl.textContent = `読み込みに失敗しました: ${err.message}`;
-  } finally {
-    e.target.value = '';
+    msgEl.textContent = `クリップボードの読み込みに失敗しました: ${err.message}`;
   }
 });
 

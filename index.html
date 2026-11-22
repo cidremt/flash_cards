@@ -814,15 +814,33 @@
 
     <div class="container">
       <div class="panel">
-        <p class="backup-note">単語帳・タグ・復習スケジュールをまとめてJSONで保存・復元できます。</p>
-        <button type="button" id="btn-export" class="btn btn-primary" style="margin-bottom:14px;">
-          JSONを書き出す
-        </button>
-
-        <div class="field" style="margin-bottom:0;">
-          <label for="input-import">JSONから復元・追加</label>
-          <input id="input-import" class="file-input" type="file" accept="application/json,.json">
+        <p class="backup-note">単語帳・タグ・復習スケジュールを同じJSON形式で書き出し・インポートできます。</p>
+        <div style="display:grid;gap:8px;margin-bottom:16px;">
+          <button type="button" id="btn-export" class="btn btn-primary">
+            JSONファイルを書き出す
+          </button>
+          <button type="button" id="btn-copy-json" class="btn btn-subtle">
+            JSONをクリップボードにコピー
+          </button>
         </div>
+
+        <div style="border-top:1px solid var(--border);padding-top:14px;display:grid;gap:10px;">
+          <label class="toggle-label" style="font-size:0.84rem;">
+            <span class="toggle-switch">
+              <input type="checkbox" id="toggle-replace-import">
+              <span class="toggle-track"></span>
+            </span>
+            <span>既存データを入れ替える（完全復元）</span>
+          </label>
+          <button type="button" id="btn-import-file" class="btn btn-subtle">
+            JSONファイルからインポート
+          </button>
+          <button type="button" id="btn-import-clipboard" class="btn btn-subtle">
+            クリップボードのJSONをインポート
+          </button>
+          <input id="input-import" class="hidden" type="file" accept=".json,application/json,text/plain">
+        </div>
+
         <div id="backup-msg" class="status-msg"></div>
       </div>
     </div>
