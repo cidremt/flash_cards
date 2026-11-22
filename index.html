@@ -368,12 +368,61 @@
     /* セグメントタブ */
     .sub-nav {
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: repeat(3, 1fr);
       gap: 4px;
       padding: 4px;
       background: var(--surface-subtle);
       border-radius: 12px;
       margin-bottom: 14px;
+    }
+
+    /* 聞き流しプレイヤー */
+    .listen-settings {
+      display: grid;
+      grid-template-columns: 1.4fr 1fr;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .listen-settings select {
+      width: 100%;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 16px;
+      font-family: inherit;
+    }
+    .listen-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      min-height: 220px;
+      padding: 22px 20px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      gap: 10px;
+      text-align: center;
+    }
+    .listen-word { font-size: 0.86rem; font-weight: 700; color: var(--muted); }
+    .listen-example { font-size: 1.32rem; font-weight: 700; line-height: 1.5; transition: color 0.15s; }
+    .listen-ja { font-size: 0.98rem; color: var(--muted); line-height: 1.5; transition: color 0.15s; }
+    .speaking { color: var(--accent) !important; }
+    .listen-controls {
+      display: grid;
+      grid-template-columns: 1fr 1.6fr 1fr;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .listen-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 12px;
+      font-size: 0.84rem;
+      color: var(--muted);
     }
     .sub-nav button {
       padding: 8px 6px;
@@ -729,6 +778,7 @@
       <div id="deck-main-view">
       <div class="sub-nav">
         <button type="button" class="active" data-subtab="study">学習</button>
+        <button type="button" data-subtab="listen">聞き流し</button>
         <button type="button" data-subtab="add">登録</button>
       </div>
 
@@ -777,6 +827,50 @@
         </div>
       </div>
 
+      <!-- 聞き流しタブ（学習進捗に影響なし） -->
+      <div id="subtab-listen" class="sub-tab">
+        <div id="listen-tag-strip" class="chip-strip"></div>
+
+        <div class="listen-settings">
+          <select id="listen-lang" aria-label="例文の読み上げ言語">
+            <option value="zh-TW">台湾華語 (zh-TW)</option>
+            <option value="en-US">英語 (en-US)</option>
+            <option value="ko-KR">韓国語 (ko-KR)</option>
+            <option value="zh-CN">中国語簡体 (zh-CN)</option>
+            <option value="fr-FR">フランス語 (fr-FR)</option>
+            <option value="de-DE">ドイツ語 (de-DE)</option>
+          </select>
+          <select id="listen-rate" aria-label="読み上げ速度">
+            <option value="0.8">速度 0.8x</option>
+            <option value="1" selected>速度 1.0x</option>
+            <option value="1.2">速度 1.2x</option>
+          </select>
+        </div>
+
+        <div class="listen-card">
+          <div id="listen-word" class="listen-word">0 / 0</div>
+          <div id="listen-example" class="listen-example">例文のあるカードがありません</div>
+          <div id="listen-ja" class="listen-ja"></div>
+        </div>
+
+        <div class="listen-controls">
+          <button type="button" id="btn-listen-prev" class="btn btn-subtle">前へ</button>
+          <button type="button" id="btn-listen-play" class="btn btn-primary">再生</button>
+          <button type="button" id="btn-listen-next" class="btn btn-subtle">次へ</button>
+        </div>
+
+        <div class="listen-footer">
+          <label class="toggle-label" style="font-size:0.84rem;">
+            <span class="toggle-switch">
+              <input type="checkbox" id="toggle-listen-repeat" checked>
+              <span class="toggle-track"></span>
+            </span>
+            <span>リピート</span>
+          </label>
+          <button type="button" id="btn-listen-shuffle" class="btn-ghost">シャッフル</button>
+        </div>
+      </div>
+
       <!-- 登録タブ -->
       <div id="subtab-add" class="sub-tab">
         <form id="add-form" class="panel">
@@ -794,8 +888,12 @@
             <input id="input-back" type="text" required autocomplete="off">
           </div>
           <div class="field">
-            <label for="input-note">メモ（任意）</label>
-            <textarea id="input-note" rows="2"></textarea>
+            <label for="input-example">例文</label>
+            <textarea id="input-example" rows="2"></textarea>
+          </div>
+          <div class="field">
+            <label for="input-example-ja">例文訳（日本語）</label>
+            <textarea id="input-example-ja" rows="2"></textarea>
           </div>
           <div class="field">
             <label for="tag-word-search">タグ（単語検索で #見出し語 を追加）</label>
