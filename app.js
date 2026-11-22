@@ -17,6 +17,15 @@ let pendingLinkTargets = []; // [{ cardId, tag }]
 let studyQueue = [];
 let currentIndex = 0;
 let showingBack = false;
+const LISTEN_LANGS = [
+  { code: 'zh-TW', label: '台湾華語' },
+  { code: 'en-US', label: '英語' },
+  { code: 'ko-KR', label: '韓国語' },
+  { code: 'zh-CN', label: '簡体中国語' },
+  { code: 'fr-FR', label: 'フランス語' },
+  { code: 'de-DE', label: 'ドイツ語' },
+];
+let activeListenLang = 'zh-TW';
 let listenQueue = [];
 let listenIndex = 0;
 let isListening = false;
@@ -739,9 +748,8 @@ function renderWorkspace() {
   });
 
   const deck = allDecks.find((d) => d.id === activeDeckId);
-  if (deck && deck.lang) {
-    document.getElementById('listen-lang').value = deck.lang;
-  }
+  if (deck && deck.lang) activeListenLang = deck.lang;
+  renderListenLangChips();
 
   renderFormHelpers();
   renderCardList();
@@ -812,7 +820,9 @@ function renderStudyCard() {
   const deckEl = document.getElementById('card-deck');
   const sideEl = document.getElementById('card-side');
   const faceEl = document.getElementById('card-face');
-  const noteEl = document.getElementById('card-note');
+  const exBoxEl = document.getElementById('card-example-box');
+  const exEl = document.getElementById('card-example');
+  const exJaEl = document.getElementById('card-example-ja');
   const tagsEl = document.getElementById('card-tags');
   const subEl = document.getElementById('card-sub');
   const relatedBox = document.getElementById('related-box');
@@ -825,7 +835,7 @@ function renderStudyCard() {
   if (studyQueue.length === 0) {
     deckEl.classList.add('hidden');
     sideEl.textContent = '';
-    noteEl.textContent = '';
+    exBoxEl.classList.add('hidden');
     relatedBox.classList.add('hidden');
     revealWrap.classList.add('hidden');
     ratingGrid.classList.add('hidden');
@@ -863,7 +873,13 @@ function renderStudyCard() {
   if (showingBack) {
     sideEl.textContent = 'ANSWER';
     faceEl.textContent = card.back;
-    noteEl.textContent = [card.example, card.exampleJa].filter(Boolean).join('\n');
+    if (card.example || card.exampleJa) {
+      exEl.textContent = card.example || '';
+      exJaEl.textContent = card.exampleJa || '';
+      exBoxEl.classList.remove('hidden');
+    } else {
+      exBoxEl.classList.add('hidden');
+    }
     subEl.textContent = '';
     renderRelatedCards(card);
     revealWrap.classList.add('hidden');
@@ -875,7 +891,7 @@ function renderStudyCard() {
   } else {
     sideEl.textContent = 'QUESTION';
     faceEl.textContent = card.front;
-    noteEl.textContent = '';
+    exBoxEl.classList.add('hidden');
     subEl.textContent = 'タップで裏返す';
     relatedBox.classList.add('hidden');
     revealWrap.classList.remove('hidden');
@@ -943,6 +959,28 @@ function sleepMs(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function renderListenLangChips() {
+  const strip = document.getElementById('listen-lang-strip');
+  if (!strip) return;
+  strip.innerHTML = '';
+  for (const item of LISTEN_LANGS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = `chip-btn${activeListenLang === item.code ? ' active' : ''}`;
+    btn.textContent = item.label;
+    btn.addEventListener('click', async () => {
+      activeListenLang = item.code;
+      renderListenLangChips();
+      const deck = allDecks.find((d) => d.id === activeDeckId);
+      if (deck) {
+        deck.lang = item.code;
+        await putToStore(DECK_STORE, deck);
+      }
+    });
+    strip.appendChild(btn);
+  }
+}
+
 function rebuildListenQueue() {
   listenQueue = getStudyFilteredCards().filter((c) => Boolean(c.example));
   if (listenIndex >= listenQueue.length) listenIndex = 0;
@@ -990,7 +1028,7 @@ async function startListening() {
 
   while (isListening && session === listenSessionId) {
     const card = listenQueue[listenIndex];
-    const lang = document.getElementById('listen-lang').value;
+    const lang = activeListenLang;
     const rate = Number(document.getElementById('listen-rate').value) || 1;
 
     renderListenCard('example');
@@ -1276,12 +1314,8 @@ document.getElementById('btn-listen-shuffle').addEventListener('click', () => {
   renderListenCard();
   if (wasPlaying) startListening();
 });
-document.getElementById('listen-lang').addEventListener('change', async (e) => {
-  const deck = allDecks.find((d) => d.id === activeDeckId);
-  if (deck) {
-    deck.lang = e.target.value;
-    await putToStore(DECK_STORE, deck);
-  }
+document.getElementById('listen-rate').addEventListener('input', (e) => {
+  document.getElementById('listen-rate-val').textContent = `${Number(e.target.value).toFixed(1)}x`;
 });
 document.getElementById('btn-backup-back').addEventListener('click', () => {
   renderHomeCarousel();

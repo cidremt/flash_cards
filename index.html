@@ -377,21 +377,33 @@
     }
 
     /* 聞き流しプレイヤー */
-    .listen-settings {
-      display: grid;
-      grid-template-columns: 1.4fr 1fr;
-      gap: 8px;
-      margin-bottom: 12px;
+    .listen-lang-bar {
+      margin-bottom: 6px;
     }
-    .listen-settings select {
-      width: 100%;
-      padding: 8px 10px;
-      border: 1px solid var(--border);
-      border-radius: 10px;
+    .rate-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
       background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 8px 12px;
+      margin-bottom: 12px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .rate-row input[type="range"] {
+      flex: 1;
+      accent-color: var(--accent);
+      margin: 0;
+      cursor: pointer;
+    }
+    .rate-val {
+      min-width: 36px;
+      text-align: right;
+      font-weight: 700;
       color: var(--text);
-      font-size: 16px;
-      font-family: inherit;
+      font-variant-numeric: tabular-nums;
     }
     .listen-card {
       background: var(--surface);
@@ -531,7 +543,16 @@
       color: var(--muted);
     }
     .card-face { font-size: 1.65rem; font-weight: 700; word-break: break-word; }
-    .card-note { margin-top: 10px; font-size: 0.88rem; color: var(--muted); white-space: pre-wrap; }
+    .card-example-box {
+      width: 100%;
+      margin-top: 14px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      background: var(--surface-subtle);
+      text-align: left;
+    }
+    .card-example { font-size: 0.94rem; font-weight: 600; color: var(--text); line-height: 1.5; }
+    .card-example-ja { font-size: 0.82rem; color: var(--muted); margin-top: 3px; line-height: 1.45; }
     .card-tags { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 12px; }
     .card-sub { margin-top: 14px; font-size: 0.78rem; color: var(--muted); }
 
@@ -806,7 +827,10 @@
             <span id="card-side" class="card-side"></span>
           </div>
           <div id="card-face" class="card-face">単語がありません</div>
-          <div id="card-note" class="card-note"></div>
+          <div id="card-example-box" class="card-example-box hidden">
+            <div id="card-example" class="card-example"></div>
+            <div id="card-example-ja" class="card-example-ja"></div>
+          </div>
           <div id="card-tags" class="card-tags"></div>
           <div id="card-sub" class="card-sub"></div>
           <div id="related-box" class="related-box hidden">
@@ -831,20 +855,14 @@
       <div id="subtab-listen" class="sub-tab">
         <div id="listen-tag-strip" class="chip-strip"></div>
 
-        <div class="listen-settings">
-          <select id="listen-lang" aria-label="例文の読み上げ言語">
-            <option value="zh-TW">台湾華語 (zh-TW)</option>
-            <option value="en-US">英語 (en-US)</option>
-            <option value="ko-KR">韓国語 (ko-KR)</option>
-            <option value="zh-CN">中国語簡体 (zh-CN)</option>
-            <option value="fr-FR">フランス語 (fr-FR)</option>
-            <option value="de-DE">ドイツ語 (de-DE)</option>
-          </select>
-          <select id="listen-rate" aria-label="読み上げ速度">
-            <option value="0.8">速度 0.8x</option>
-            <option value="1" selected>速度 1.0x</option>
-            <option value="1.2">速度 1.2x</option>
-          </select>
+        <div class="listen-lang-bar">
+          <div id="listen-lang-strip" class="chip-strip" style="margin-bottom:0;"></div>
+        </div>
+
+        <div class="rate-row">
+          <span>速度</span>
+          <input id="listen-rate" type="range" min="0.5" max="1.6" step="0.1" value="1.0" aria-label="読み上げ速度">
+          <span id="listen-rate-val" class="rate-val">1.0x</span>
         </div>
 
         <div class="listen-card">
